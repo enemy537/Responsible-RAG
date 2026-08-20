@@ -27,6 +27,16 @@ router = APIRouter()
 #used for updating short and long term memory for chats
 memory_agent = MemoryAgent()
 
+###helper function for safely accesing conv ids
+
+
+def _conversation_id_query(conversation_id: str) -> dict:
+    """Return a Mongo query that works for both ObjectId IDs and string IDs."""
+    if ObjectId.is_valid(conversation_id):
+        return {"_id": ObjectId(conversation_id)}
+    return {"_id": conversation_id}
+##############
+
 
 def _get_db():
     from src.api.db.database import get_database
@@ -128,7 +138,7 @@ async def get_conversation(
     if db is None:
         raise HTTPException(503, "Database not available")
 
-    conv = db["conversations"].find_one({"_id": ObjectId(conversation_id), "user_id": current_user["sub"]})
+    conv = db["conversations"].find_one({**_conversation_id_query(conversation_id), "user_id": current_user["sub"]})
     if not conv:
         raise HTTPException(404, "Conversation not found")
 
@@ -149,13 +159,13 @@ async def rename_conversation(
         raise HTTPException(503, "Database not available")
 
     result = db["conversations"].update_one(
-        {"_id": ObjectId(conversation_id), "user_id": current_user["sub"]},
+        {**_conversation_id_query(conversation_id), "user_id": current_user["sub"]},
         {"$set": {"title": body.title, "updated_at": _now()}},
     )
     if result.matched_count == 0:
         raise HTTPException(404, "Conversation not found")
 
-    conv = db["conversations"].find_one({"_id": ObjectId(conversation_id)})
+    conv = db["conversations"].find_one({**_conversation_id_query(conversation_id), "user_id": current_user["sub"]})
     return _conv_to_response(conv)
 
 
@@ -169,7 +179,7 @@ async def delete_conversation(
         raise HTTPException(503, "Database not available")
 
     result = db["conversations"].delete_one(
-        {"_id": ObjectId(conversation_id), "user_id": current_user["sub"]}
+        {**_conversation_id_query(conversation_id), "user_id": current_user["sub"]}
     )
     if result.deleted_count == 0:
         raise HTTPException(404, "Conversation not found")
@@ -188,7 +198,7 @@ async def get_messages(
     if db is None:
         raise HTTPException(503, "Database not available")
 
-    conv = db["conversations"].find_one({"_id": ObjectId(conversation_id), "user_id": current_user["sub"]})
+    conv = db["conversations"].find_one({**_conversation_id_query(conversation_id), "user_id": current_user["sub"]})
     if not conv:
         raise HTTPException(404, "Conversation not found")
 
@@ -239,7 +249,7 @@ async def chat(
     else:
         # Fetch existing conversation from database
         if db is not None:
-            conv_doc = db["conversations"].find_one({"_id": ObjectId(conv_id), "user_id": user_id})
+            conv_doc = db["conversations"].find_one({**_conversation_id_query(conv_id), "user_id": user_id})
             if not conv_doc:
                 raise HTTPException(404, "Conversation not found")
             # If memory not in document, initialise it
