@@ -211,7 +211,7 @@ async def get_messages(
 
 # ── RAG (single-turn) ────────────────────────────────────────────────────────
 
-@router.post("")
+@router.post("/")
 async def chat(
     body: ChatRequest,
     chain = Depends(get_rag_chain),

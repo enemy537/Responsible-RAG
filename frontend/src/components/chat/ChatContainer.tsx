@@ -161,19 +161,10 @@ export function ChatContainer() {
 
   // ── Handlers ────────────────────────────────────────────
   const handleNewConversation = useCallback(() => {
-    const id = `conv-${Date.now()}`;
-    addConversation({
-      id,
-      title: 'New conversation',
-      lastMessage: null,
-      lastMessageAt: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      messageCount: 0,
-    });
-    setActiveConversationId(id);
-    navigate(`/chat/${id}`);
+    setActiveConversationId(null);
+    navigate('/chat');
     if (isMobile) setMobileSidebarOpen(false);
-  }, [addConversation, setActiveConversationId, navigate, isMobile]);
+  }, [setActiveConversationId, navigate, isMobile]);
 
   const handleSelectConversation = useCallback(
     (id: string) => {
