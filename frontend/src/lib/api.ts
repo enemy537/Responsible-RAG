@@ -223,7 +223,7 @@ export const api = {
   chat: {
     /** Send a question and get a RAG answer back */
     send: (body: ChatRequestDTO) =>
-      request<ChatResponseDTO>('POST', '/chat', body),
+      request<ChatResponseDTO>('POST', '/chat/', body),
   },
 
   /** Conversations */

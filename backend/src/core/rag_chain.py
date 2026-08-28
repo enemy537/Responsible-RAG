@@ -24,14 +24,14 @@ from langchain.chat_models import init_chat_model
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langsmith import traceable
+from langchain_community.retrievers import BM25Retriever
 
 from src.core.config import Settings
 from src.core.embeddings import EmbeddingFactory
-from src.core.retrievers import RetrieverFactory
+from src.core.retrievers import EnsembleWithScores, RetrieverFactory
 from src.core.vector_store import KnowledgeBase
 
 logger = logging.getLogger(__name__)
-
 
 @dataclass
 class RAGResult:
@@ -119,8 +119,28 @@ class RAGChain:
 
         vec_retriever = kb.as_retriever(k=settings.vec_retriever_k)
         all_docs = kb.get_all_documents()
-        ensemble = RetrieverFactory.build_ensemble(vec_retriever, all_docs, settings)
 
+        #passed for the fallback ensemble
+        bm25_ensemble = BM25Retriever.from_documents(
+            all_docs,
+            search_kwargs={"k": settings.bm25_retriever_k},
+        )
+
+        fallback_ensemble = RetrieverFactory.build_ensemble(
+            vec_retriever=vec_retriever,
+            all_docs=all_docs,
+            settings=settings,
+        )
+
+        ensemble = EnsembleWithScores(
+            retrievers=[vec_retriever, bm25_ensemble],
+            weights=[settings.vec_weight, settings.bm25_weight],
+            settings=settings,
+            ensemble=bm25_ensemble,
+            top_k=settings.max_returned_sources,
+            bm25_s=settings.bm25_s,
+            relevance_threshold=settings.relevance_threshold,
+        )
         llm = init_chat_model(
             model=settings.llm_model,
             temperature=settings.llm_temperature,
@@ -137,7 +157,9 @@ class RAGChain:
             | llm
             | StrOutputParser()
         )
+
         self._ensemble = ensemble
+        self._settings = settings
         logger.info("RAGChain ready.")
 
     @traceable(name="rag_chain_invoke", run_type="chain")
@@ -150,3 +172,4 @@ class RAGChain:
         sources = _extract_source_metadata(self._ensemble.invoke(question))
         return RAGResult(answer=answer, sources=sources)
 
+    
