@@ -85,7 +85,11 @@ jobs:
           # (Python prefers a package over a module), which silently breaks
           # imports at runtime: src/core/memory/ shadowing src/core/memory.py
           # made the backend die with an ImportError while booting.
-          shadows=$(find backend/src -type d ! -path "*__pycache__*" -exec sh -c 'for d; do [ -f "$d.py" ] && echo "$d"; done' sh {} +)
+          # NOTE: the inner test must be an `if`, not `cmd && echo` - `find
+          # -exec ... +` reports failure if any invocation exits non-zero, so
+          # `&& echo` would abort this script under `set -e` whenever there is
+          # NO collision (the healthy case).
+          shadows=$(find backend/src -type d ! -path "*__pycache__*" -exec sh -c 'for d; do if [ -f "$d.py" ]; then echo "$d"; fi; done' sh {} +)
           if [ -n "$shadows" ]; then
             echo "ABORT: a directory shadows a module of the same name - move it out of the tree:"
             echo "$shadows"
