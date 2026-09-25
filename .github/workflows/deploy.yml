@@ -80,6 +80,18 @@ jobs:
           git pull --ff-only
           echo "commit: $(git rev-parse --short HEAD)"
 
+          # Images are built from THIS working tree, so anything stray here is
+          # copied into the image. A directory shadows a module of the same name
+          # (Python prefers a package over a module), which silently breaks
+          # imports at runtime: src/core/memory/ shadowing src/core/memory.py
+          # made the backend die with an ImportError while booting.
+          shadows=$(find backend/src -type d ! -path "*__pycache__*" -exec sh -c 'for d; do [ -f "$d.py" ] && echo "$d"; done' sh {} +)
+          if [ -n "$shadows" ]; then
+            echo "ABORT: a directory shadows a module of the same name - move it out of the tree:"
+            echo "$shadows"
+            exit 1
+          fi
+
           docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
           docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
           REMOTE

@@ -68,6 +68,17 @@ tests/
 .idea
 .vscode
 *.swp
+
+# Python bytecode caches. The image is built from the host's working tree, so
+# stale .pyc files generated there (possibly by a different interpreter) would
+# otherwise be copied in.
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
+# NOTE: the build context is the working tree, so untracked files on the host
+# end up in the image. Anything stale must be removed from the tree - see the
+# shadowing guard in .github/workflows/deploy.yml.
 *.swo
 .DS_Store
 
