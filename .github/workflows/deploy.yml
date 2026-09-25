@@ -26,22 +26,48 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      # Fail here with a readable message instead of deep inside an SSH call:
+      # an empty EC2_HOST makes `ssh-keyscan` exit 1 immediately.
+      - name: Check required secrets
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+          USER: ${{ secrets.EC2_USER }}
+          APP_DIR: ${{ secrets.EC2_APP_DIR }}
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          missing=""
+          for v in HOST USER APP_DIR SSH_KEY; do
+            [ -n "${!v:-}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::missing or empty repository secret(s):$missing"
+            echo "Set them in Settings -> Secrets and variables -> Actions (docs/deployment.md section 3)."
+            exit 1
+          fi
+          echo "all four secrets are present (host=$HOST, user=$USER)"
+
       - name: Set up SSH
         env:
           HOST: ${{ secrets.EC2_HOST }}
           SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
         run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
           printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # stderr is deliberately NOT discarded: on failure it is what explains
+          # why (empty host, unreachable port 22, DNS).
+          ssh-keyscan -T 10 -H "$HOST" >> ~/.ssh/known_hosts
+          test -s ~/.ssh/known_hosts || { echo "::error::ssh-keyscan returned no host keys for $HOST - is port 22 reachable from GitHub runners (security group)?"; exit 1; }
+          echo "deploy key fingerprint: $(ssh-keygen -lf ~/.ssh/deploy_key | awk '{print $2}')"
 
       - name: Deploy
         env:
           HOST: ${{ secrets.EC2_HOST }}
           USER: ${{ secrets.EC2_USER }}
         run: |
-          ssh -T -i ~/.ssh/deploy_key "$USER@$HOST" bash -s <<'REMOTE'
+          ssh -T -o BatchMode=yes -o IdentitiesOnly=yes -i ~/.ssh/deploy_key "$USER@$HOST" bash -s <<'REMOTE'
           set -euo pipefail
           cd "${{ secrets.EC2_APP_DIR }}"
 
