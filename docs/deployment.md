@@ -28,8 +28,33 @@ git remote add origin git@github.com:<owner>/<repo>.git && git push -u origin ma
 
 ```bash
 ssh-keygen -t ed25519 -N "" -f ~/.ssh/rrag_deploy
-ssh-copy-id -i ~/.ssh/rrag_deploy.pub <EC2_USER>@<EC2_HOST>
 ```
+
+Then authorize that public key on the instance. `ssh-copy-id` alone will fail here
+(`Permission denied (publickey,...)`) unless the **account's existing key** is offered at the
+same time — on EC2 that is the `.pem` from the launch key pair, which is not in `~/.ssh`.
+Pick one:
+
+```bash
+# a) ssh-copy-id, authenticating with the EC2 .pem
+ssh-copy-id -i ~/.ssh/rrag_deploy.pub -o IdentityFile=/path/to/awskey.pem <EC2_USER>@<EC2_HOST>
+
+# b) no ssh-copy-id: append the key over a PEM-authenticated session (idempotent)
+# NB: read stdin into a variable once — calling $(cat) twice returns "" the second time.
+ssh -i /path/to/awskey.pem <EC2_USER>@<EC2_HOST> \
+  'k=$(cat); mkdir -p ~/.ssh; chmod 700 ~/.ssh; touch ~/.ssh/authorized_keys; chmod 600 ~/.ssh/authorized_keys;
+   if grep -qxF "$k" ~/.ssh/authorized_keys; then echo ALREADY_PRESENT;
+   else printf "%s\n" "$k" >> ~/.ssh/authorized_keys; echo INSTALLED; fi' \
+  < ~/.ssh/rrag_deploy.pub
+```
+
+Verify the key works **on its own** (no `.pem`, no agent):
+
+```bash
+ssh -i ~/.ssh/rrag_deploy -o IdentitiesOnly=yes -o BatchMode=yes <EC2_USER>@<EC2_HOST> 'whoami'
+```
+
+`IdentitiesOnly=yes` matters: it proves GitHub Actions will authenticate with exactly this key.
 
 ### 3. Four secrets (GitHub → Settings → Secrets and variables → Actions)
 
@@ -79,6 +104,9 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 | Symptom | Cause / fix |
 |---|---|
 | `Permission denied (publickey)` | `EC2_SSH_KEY` is not the full private key, or the public key is not in the server's `~/.ssh/authorized_keys` |
+| `ssh-copy-id` fails with `Permission denied (publickey,gssapi-keyex,gssapi-with-mic)` | The remote identity wasn't offered. `ssh-copy-id -i new.pub` only sends *that* key, so it cannot bootstrap itself over a PEM-only account (a `.pem` in `~/` is not a default identity). Add `-o IdentityFile=<the existing .pem>`, or use the append command in §2. |
+| `ssh: no such identity` / key ignored | A `.pem` needs `600` or stricter; `chmod 400 file.pem` |
+| `EC2_USER` wrong | Amazon Linux uses `ec2-user`, Ubuntu uses `ubuntu`. Check with `ssh -i <pem> <user>@<host> whoami`. |
 | `Host key verification failed` | `EC2_HOST` unreachable for `ssh-keyscan`, or an IP change — re-run and check the host |
 | `git pull` fails: "local changes would be overwritten" | The server's working tree has hand-edits. Commit or `git checkout -- .` on the host. This is what stops the pipeline from silently overwriting server-side changes. |
 | `git pull` fails: "There is no tracking information" | The server checkout is not on a branch tracking `main` (e.g. it was cloned while empty, or sits on `master`). Fix once: `cd $EC2_APP_DIR && git checkout main && git branch --set-upstream-to=origin/main` |
