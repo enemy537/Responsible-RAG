@@ -15,12 +15,9 @@ Adding a new profile
 Source validation date: June 2026
 """
 
-from enum import StrEnum
-from typing import Optional
+import logging
 
 from qdrant_client import QdrantClient
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +70,7 @@ Disability: {disability_status}
 Respond following the communication adaptation rules above. Base your response on the retrieved context. Use Canadian English spelling. If the topic involves Indigenous peoples, prioritize Indigenous voices and acknowledge the diversity of First Nations, Inuit, and Metis perspectives."""
 
 # ── Standard defaults when a field is not provided ────────────────────────────
-_STANDARD_PROFILE: dict[str, str] = {
+STANDARD_PROFILE: dict[str, str] = {
     "sex_at_birth": "Prefer not to say",
     "gender": "Not specified — use gender-neutral language throughout",
     "age_group": "Adult (18–64 years)",
@@ -151,7 +148,7 @@ class ProfileAugmenter:
 
     def __init__(self, embedding_function) -> None:
         self._embedding_function = embedding_function
-        self._retriever: Optional[any] = None
+        self._retriever: any | None = None
         # Track source titles used in the last build_prompt() call
         self._last_source_titles: set[str] = set()
 
@@ -256,7 +253,7 @@ class ProfileAugmenter:
 
     def build_prompt(
         self,
-        user_profile: Optional[dict[str, str]] = None,
+        user_profile: dict[str, str] | None = None,
         user_query: str = "",
         retrieved_documents: str = "",
     ) -> str:
@@ -267,7 +264,7 @@ class ProfileAugmenter:
         ----------
         user_profile:
             Demographic data from the user's onboarding (keys match
-            ``_STANDARD_PROFILE``).  Missing keys fall back to defaults.
+            ``STANDARD_PROFILE``).  Missing keys fall back to defaults.
         user_query:
             The user's question.
         retrieved_documents:
@@ -281,7 +278,7 @@ class ProfileAugmenter:
         # Reset source tracking for this call
         self._last_source_titles.clear()
 
-        profile = dict(_STANDARD_PROFILE)
+        profile = dict(STANDARD_PROFILE)
         if user_profile:
             # Merge — user values override defaults
             for k in profile:
@@ -310,7 +307,7 @@ class ProfileAugmenter:
 
             # If we have evidence and the value is not the generic default,
             # enrich the rule with evidence; otherwise keep the standard rule
-            if evidence and field_value != _STANDARD_PROFILE.get(field_key, ""):
+            if evidence and field_value != STANDARD_PROFILE.get(field_key, ""):
                 rules[rule_key] = (
                     f"{_STANDARD_RULES[rule_key]}\n\n"
                     f"Research-backed guidance for '{field_value}':\n{evidence}"

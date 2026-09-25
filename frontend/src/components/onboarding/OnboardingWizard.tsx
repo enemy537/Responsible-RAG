@@ -140,6 +140,7 @@ export function OnboardingWizard() {
       await api.profile.updateConsent({
         profile_mode: consent.profileMode ?? undefined,
         research_data_consent: consent.researchDataConsent,
+        chat_history_consent: consent.chatHistoryConsent,
       });
 
       // Mark onboarding complete

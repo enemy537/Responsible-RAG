@@ -12,19 +12,19 @@ Low-memory notes:
     - Return only chunk text + metadata, not full documents.
 """
 
+
 from fastapi import APIRouter, Depends
-from src.api.schemas.chat import ChatRequest
-from src.api.deps import get_rag_chain
-from src.api.middleware import get_current_user
 from pydantic import BaseModel, Field
-from typing import Optional
+
+from src.api.deps import get_rag_chain
+from src.api.security import get_current_user
 
 
 class SearchRequest(BaseModel):
     """Standalone search request."""
     query: str = Field(..., min_length=1, max_length=1024)
     top_k: int = Field(default=5, ge=1, le=20)
-    profile_key: Optional[str] = None
+    profile_key: str | None = None
 
 
 class RetrievedChunk(BaseModel):

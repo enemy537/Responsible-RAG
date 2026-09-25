@@ -83,11 +83,26 @@ class Settings(BaseSettings):
                                            # trigger recursive fallback
 
     # ── Retrieval ─────────────────────────────────────────────────────────────
-    vec_retriever_k: int = 5
-    bm25_retriever_k: int = 5
+    # Candidates fetched per retriever *before* relevance filtering. The number
+    # of documents actually sent to the LLM is dynamic: only those clearing
+    # ``retrieval_min_relevance``, capped at ``retrieval_max_docs``.
+    vec_retriever_k: int = 15
+    bm25_retriever_k: int = 15
+    retrieval_max_docs: int = 15           # never send more than this
+    retrieval_min_relevance: float = 0.35  # cosine-similarity floor
+    bm25_min_relative_score: float = 0.5   # share of the best BM25 score
     vec_weight: float = 0.7                # Must sum to 1.0 with bm25_weight
     bm25_weight: float = 0.3
 
+    # ── Conversation memory ───────────────────────────────────────────────────
+    memory_window_tokens: int = 2000       # roll the window past this budget
+    memory_history_fetch_limit: int = 60   # messages read per turn
+    # ── Chat history storage ──────────────────────────────────────────────
+    # Users who decline history storage keep their conversation in the worker's
+    # memory only, evicted after this idle TTL.
+    chat_history_default_consent: bool = True
+    ephemeral_history_ttl_seconds: int = 3600
+    ephemeral_history_max_conversations: int = 200
     # ── MongoDB ───────────────────────────────────────────────────────────────
     mongo_uri: str = ""
     mongo_db: str = "responsible_rag"

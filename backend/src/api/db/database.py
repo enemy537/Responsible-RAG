@@ -18,7 +18,7 @@ Usage:
 """
 
 import logging
-from typing import Optional
+
 from pymongo import MongoClient
 from pymongo.errors import ConnectionFailure
 
@@ -26,7 +26,7 @@ from src.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-_client: Optional[MongoClient] = None
+_client: MongoClient | None = None
 
 
 async def get_db():

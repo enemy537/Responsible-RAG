@@ -1,0 +1,59 @@
+# =============================================================================
+# deploy.yml — deploy production on every push to main
+# =============================================================================
+# Runs on the EC2 host over SSH:
+#
+#   git pull --ff-only
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Four repository secrets (Settings -> Secrets and variables -> Actions):
+#   EC2_HOST      public IP or DNS of the instance
+#   EC2_USER      ssh user, e.g. ubuntu
+#   EC2_APP_DIR   repo path on the instance, e.g. /home/ubuntu/Responsible-RAG
+#   EC2_SSH_KEY   private key for that user (full file contents)
+#
+# .env, the Mongo data and the Qdrant data stay on the host. This workflow never
+# writes to them, and it never runs `docker compose down`.
+# =============================================================================
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up SSH
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+          SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Deploy
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+          USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -T -i ~/.ssh/deploy_key "$USER@$HOST" bash -s <<'REMOTE'
+          set -euo pipefail
+          cd "${{ secrets.EC2_APP_DIR }}"
+
+          # If a bind-mount source is missing, Docker creates it as an empty
+          # directory and the database starts empty. Refuse to do that.
+          for d in ../storage/mongo/data ../storage/qdrant; do
+            [ -n "$(ls -A "$d" 2>/dev/null)" ] || { echo "ABORT: $d is missing or empty"; exit 1; }
+          done
+
+          git pull --ff-only
+          echo "commit: $(git rev-parse --short HEAD)"
+
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+          REMOTE

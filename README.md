@@ -67,7 +67,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### 3b. Run via Docker
 
-Build and start all services (MongoDB, backend, frontend, and optionally Caddy):
+Build and start the dev stack (MongoDB, Qdrant, backend, frontend):
 
 ```bash
 docker compose up --build
@@ -75,19 +75,44 @@ docker compose up --build
 
 Open the frontend at [http://localhost:3000](http://localhost:3000) and the backend API at [http://localhost:8000/docs](http://localhost:8000/docs).
 
+Caddy is **not** part of this command — it is the TLS reverse proxy and binds the
+privileged ports 80/443, so it lives in `docker-compose.prod.yml`. Use the prod
+command below if you need to test through the proxy.
+
 ---
 
 ## Docker Compose Reference
 
-The stack consists of three services:
+The stack consists of five services:
 
-| Service   | Container         | Port(s)  | Tech                          |
-|-----------|-------------------|----------|-------------------------------|
-| MongoDB   | `rag-mongo`       | 27017    | MongoDB 7 (host-persisted)    |
-| Frontend  | `rag-frontend`    | 3000     | Vite + React (Bun)            |
-| Backend   | `rag-backend`     | 8000     | FastAPI (Python)              |
+| Service   | Container         | Port(s)   | Tech                             |
+|-----------|-------------------|-----------|----------------------------------|
+| Caddy     | `rag-caddy`       | 80 / 443  | Reverse proxy — **prod stack only** |
+| Qdrant    | `qdrant-server`   | 6333/6334 | Qdrant 1.19 (host-persisted)     |
+| MongoDB   | `rag-mongo`       | 27017     | MongoDB 7 (host-persisted)       |
+| Frontend  | `rag-frontend`    | 3000      | Vite + React (nginx)             |
+| Backend   | `rag-backend`     | 8000      | FastAPI (Python)                 |
 
-> **Note:** MongoDB data is stored on the host at `./data/mongo/` so it survives container restarts and rebuilds. An initialisation script (`./data/mongo/init.js`) runs automatically on first start to create the database, user, and indexes.
+> **Note:** Both datastores are persisted on the host, outside the repo, so they survive `docker compose down`, rebuilds and image upgrades:
+>
+> * MongoDB — `../storage/mongo/data` → `/data/db`
+> * Qdrant — `../storage/qdrant` → `/qdrant/storage`
+>
+> `docker/mongo-init.js` runs only while `/data/db` is **empty** (MongoDB's own rule): it creates the app user, the collections and the indexes. On an existing data directory it is skipped, so it can never modify live data.
+
+> **Dev vs prod:** Caddy is only defined in `docker-compose.prod.yml`. Plain
+> `docker compose up` therefore starts four services and never touches ports 80/443 —
+> useful when the machine already runs another web server.
+>
+> | | Dev | Prod |
+> |---|---|---|
+> | Command | `docker compose up --build -d` | `docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d` |
+> | Reverse proxy | none — use `:3000` / `:8000` | Caddy on 80/443, TLS for `${DOMAIN}` |
+> | Datastores | host-persisted | host-persisted (same paths) |
+
+Releases are automated with GitHub Actions (CI on every pull request, SSH deploy with an
+on-host backup and automatic rollback on merge to `main`) — see
+[docs/deployment.md](docs/deployment.md) for setup, secrets and rollback instructions.
 
 ### Common commands
 
@@ -96,13 +121,62 @@ The stack consists of three services:
 | **Build & start** | `docker compose up --build` |
 | **Start in background** | `docker compose up --build -d` |
 | **Stop** | `docker compose down` |
-| **Stop & delete volumes** | `docker compose down -v` |
+| **Stop & delete named volumes** | `docker compose down -v` — safe here: this stack uses host bind mounts, not named volumes |
 | **Rebuild a single service** | `docker compose build frontend` (or `backend`) |
 | **Restart a service** | `docker compose restart frontend` |
 | **View logs (all)** | `docker compose logs -f` |
 | **View logs (one service)** | `docker compose logs -f backend` (or `mongo`) |
 | **View running containers** | `docker compose ps` |
 | **Shell into a container** | `docker compose exec mongo mongosh --quiet` |
+
+> ⚠️ **Never** delete or rename `../storage/mongo/data` or `../storage/qdrant` on a server that holds real data. If a datastore's host directory is missing, Docker creates an empty one and the service starts empty — which looks exactly like data loss. Take a backup first.
+
+---
+
+## Backup & restore
+
+Both stateful services have a dedicated tool plus one wrapper that covers everything.
+Backups land in `../storage/backups/<timestamp>/` and are self-describing
+(checksums + manifests), so they can be verified later, even off-site.
+
+| Action | Command |
+|---|---|
+| **Back up everything** | `scripts/backup.sh dump` |
+| **Back up one service** | `scripts/backup.sh dump --only mongo` (or `--only qdrant`) |
+| **Verify a backup** | `scripts/backup.sh verify <dir>` (offline: gzip/tar + SHA-256) |
+| **Restore everything** | `scripts/backup.sh restore <dir> --yes` |
+| **List backups** | `scripts/backup.sh list` |
+
+What each backup contains:
+
+* `mongo.archive.gz` — `mongodump` of every database (or `MONGO_DB`), plus a JSON manifest with size and SHA-256.
+* `qdrant/<collection>.snapshot` — a consistent, point-in-time Qdrant snapshot per collection (a tar archive holding config, segments and WAL). Snapshots are created on the live server, downloaded, checksum-verified, and then **removed from the server** so they never fill the data disk.
+
+Restore semantics (both need `--yes`; nothing runs without it):
+
+* **Mongo** merges by default. Add `--drop` to replace the collections present in the archive.
+* **Qdrant** uses `priority=snapshot`, which **replaces** the points in the target collection. To recover into a fresh collection and keep the original intact, use the service tool directly:
+  ```bash
+  scripts/qdrant-backup.sh restore <dir>/qdrant --yes --into <new_collection>
+  ```
+
+Credentials and remote targets:
+
+```bash
+# dumping is automatic for containers started with MONGO_INITDB_ROOT_* (the default)
+MONGO_DUMP_AUTH="-u rag -p secret --authenticationDatabase admin" scripts/backup.sh dump
+
+# restore into a server that requires auth
+MONGO_RESTORE_URI="mongodb://rag:secret@127.0.0.1:27017" scripts/backup.sh restore <dir> --yes
+
+# production does not publish 27017/6334 — reach the datastores over the compose network
+MONGO_RESTORE_NETWORK=responsible-rag_default MONGO_RESTORE_URI=mongodb://mongo:27017 \
+  scripts/backup.sh restore <dir> --yes
+```
+
+> A backup on the same disk as the databases does not protect you. Copy
+> `../storage/backups/<timestamp>/` to another host or object store, and verify it
+> there with `scripts/backup.sh verify <dir>`.
 
 ---
 

@@ -4,8 +4,8 @@ schemas/feedback.py — User feedback models
 Covers per-message feedback (thumbs up/down) and general feedback forms.
 """
 
+
 from pydantic import BaseModel, Field
-from typing import Optional
 
 
 class MessageFeedbackRequest(BaseModel):
@@ -25,7 +25,7 @@ class MessageFeedbackRequest(BaseModel):
         ..., description="'up' for thumbs up, 'down' for thumbs down.",
         pattern="^(up|down)$",
     )
-    comment: Optional[str] = Field(
+    comment: str | None = Field(
         None, max_length=2000,
         description="Optional free-text explanation.",
     )
@@ -42,7 +42,7 @@ class FeedbackSubmitRequest(BaseModel):
         ..., description="Type of feedback.",
         example="general",
     )
-    subject: Optional[str] = Field(
+    subject: str | None = Field(
         None, max_length=200,
         description="Short subject line.",
     )

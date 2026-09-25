@@ -1,118 +1,94 @@
-"""
-schemas/__init__.py — Re-export all Pydantic models
-=====================================================
-Import convenience::
+"""Re-export of every API schema for convenient importing."""
 
-    from src.api.schemas import ChatRequest, UserResponse, ...
-"""
-
-# Auth
+from src.api.schemas.admin_alert import AdminAlertListResponse, AdminAlertResponse
 from src.api.schemas.auth import (
-    RegisterRequest,
+    ForgotPasswordRequest,
     LoginRequest,
-    LoginResponse,
-    GoogleAuthRequest,
-    VerifyEmailRequest,
-    ResetPasswordRequest,
-    SetNewPasswordRequest,
-    UserResponse,
+    RegisterRequest,
     TokenResponse,
 )
-
-# Profile & Consent
-from src.api.schemas.profile import (
-    ProfileResponse,
-    ProfileUpdateRequest,
-    ConsentResponse,
-    ConsentUpdateRequest,
-    ProfileMode,
-    GenerateProfileRequest,
-    GenerateProfileResponse,
-)
-
-# Chat
 from src.api.schemas.chat import (
     ChatRequest,
     ChatResponse,
     ChatStreamRequest,
-    ConversationResponse,
+    CitationSchema,
     ConversationListItem,
     ConversationListResponse,
-    MessageResponse,
+    ConversationResponse,
     CreateConversationRequest,
+    MessageResponse,
     RenameConversationRequest,
-    CitationSchema,
 )
-
-# Source / Documents
-from src.api.schemas.source import (
-    SourceResponse,
-    SourceListResponse,
-    SourceCreateRequest,
-    SourceUpdateRequest,
-    UploadResponse as SourceUploadResponse,
-    SourceType,
-)
-
-# Feedback
-from src.api.schemas.feedback import (
-    FeedbackSubmitRequest,
-    FeedbackResponse,
-    MessageFeedbackRequest,
-)
-
-# Common
 from src.api.schemas.common import (
     ErrorResponse,
-    PaginationParams,
     PaginatedResponse,
+    PaginationParams,
     StatsResponse,
+)
+from src.api.schemas.feedback import (
+    FeedbackResponse,
+    FeedbackSubmitRequest,
+    MessageFeedbackRequest,
+)
+from src.api.schemas.profile import (
+    AdaptationField,
+    ConsentResponse,
+    ConsentUpdateRequest,
+    GenerateProfileRequest,
+    GenerateProfileResponse,
+    ProfileMode,
+    ProfileResponse,
+    ProfileUpdateRequest,
+)
+from src.api.schemas.source import (
+    SourceCreateRequest,
+    SourceListResponse,
+    SourceResponse,
+    SourceType,
+    SourceUpdateRequest,
+    UploadResponse,
+    URLUploadRequest,
+    YouTubeUploadRequest,
 )
 
 __all__ = [
-    # Auth
-    "RegisterRequest",
-    "LoginRequest",
-    "LoginResponse",
-    "GoogleAuthRequest",
-    "VerifyEmailRequest",
-    "ResetPasswordRequest",
-    "SetNewPasswordRequest",
-    "UserResponse",
-    "TokenResponse",
-    # Profile
-    "ProfileResponse",
-    "ProfileUpdateRequest",
-    "ConsentResponse",
-    "ConsentUpdateRequest",
-    "ProfileMode",
-    "GenerateProfileRequest",
-    "GenerateProfileResponse",
-    # Chat
+    "AdaptationField",
+    "AdminAlertListResponse",
+    "AdminAlertResponse",
     "ChatRequest",
     "ChatResponse",
     "ChatStreamRequest",
-    "ConversationResponse",
+    "CitationSchema",
+    "ConsentResponse",
+    "ConsentUpdateRequest",
     "ConversationListItem",
     "ConversationListResponse",
-    "MessageResponse",
+    "ConversationResponse",
     "CreateConversationRequest",
-    "RenameConversationRequest",
-    "CitationSchema",
-    # Source
-    "SourceResponse",
-    "SourceListResponse",
-    "SourceCreateRequest",
-    "SourceUpdateRequest",
-    "SourceUploadResponse",
-    "SourceType",
-    # Feedback
-    "FeedbackSubmitRequest",
-    "FeedbackResponse",
-    "MessageFeedbackRequest",
-    # Common
     "ErrorResponse",
-    "PaginationParams",
+    "FeedbackResponse",
+    "FeedbackSubmitRequest",
+    "ForgotPasswordRequest",
+    "GenerateProfileRequest",
+    "GenerateProfileResponse",
+    "LoginRequest",
+    "MessageFeedbackRequest",
+    "MessageResponse",
     "PaginatedResponse",
+    "PaginationParams",
+    "ProfileMode",
+    "ProfileResponse",
+    "ProfileUpdateRequest",
+    "RegisterRequest",
+    "RenameConversationRequest",
+    "SourceCreateRequest",
+    "SourceListResponse",
+    "SourceResponse",
+    "SourceType",
+    "SourceUpdateRequest",
     "StatsResponse",
+    "TokenResponse",
+    "UploadResponse",
+    "URLUploadRequest",
+    "YouTubeUploadRequest",
 ]

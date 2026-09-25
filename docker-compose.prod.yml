@@ -5,7 +5,35 @@
 # Sets the correct URLs for production using your DOMAIN from .env.
 # =============================================================================
 
+# ── Named volumes for Caddy's certificates and configuration ────────────────
+volumes:
+  caddy_data:
+  caddy_config:
+
 services:
+
+  # ---------------------------------------------------------------------------
+  # Caddy — Reverse proxy: terminates TLS (Let's Encrypt) for ${DOMAIN}
+  # ---------------------------------------------------------------------------
+  # Production-only. It binds the privileged ports 80/443 and 404s direct-IP
+  # access, so it belongs to the prod stack instead of the base file. Dev starts
+  # without it and reaches the frontend/backend directly.
+  caddy:
+    image: caddy:2-alpine
+    container_name: rag-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      - .env
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
 
   frontend:
     build:

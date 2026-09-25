@@ -1,15 +1,13 @@
 """Simple auth service — direct MongoDB ops, no classes. Matches fastapi_auth."""
 
-from datetime import datetime, timezone
-from typing import Optional
 import logging
-
-import jwt as pyjwt
-import bcrypt as _bcrypt
-import httpx
+from datetime import UTC, datetime
 from urllib.parse import urlencode
 
-from src.api.db.database import get_users_collection
+import bcrypt as _bcrypt
+import httpx
+import jwt as pyjwt
+
 from src.core.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -25,7 +23,7 @@ def verify_password(plain: str, hashed: str) -> bool:
 # ── JWT ───────────────────────────────────────────────────────────────────────
 
 def _now() -> int:
-    return int(datetime.now(timezone.utc).timestamp())
+    return int(datetime.now(UTC).timestamp())
 
 def create_token(data: dict, expires_delta: int | None = None) -> str:
     settings = get_settings()
@@ -106,8 +104,8 @@ def send_verification_email(to_email: str, token: str) -> None:
         return
 
     import smtplib
-    from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = "Verify your email — Responsible RAG"

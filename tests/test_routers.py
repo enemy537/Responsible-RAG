@@ -6,16 +6,16 @@ Validates routes, serialization, and status codes without loading heavy
 models or needing a running MongoDB.
 """
 
-import sys
 import os
+import sys
 
 # Ensure backend/src is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
 
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 from fastapi.testclient import TestClient
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -36,8 +36,12 @@ def client():
         from src.api import create_app
         app = create_app()
 
-        # Override auth dependency globally
-        from src.api.middleware import get_current_user
+        # Heavy services must never be constructed in tests
+        from src.api.deps import get_profile_generator, get_rag_chain
+        from src.api.security import get_current_user
+
+        app.dependency_overrides[get_rag_chain] = lambda: MagicMock()
+        app.dependency_overrides[get_profile_generator] = lambda: MagicMock()
         app.dependency_overrides[get_current_user] = lambda: _FAKE_USER
 
         with TestClient(app) as c:
@@ -56,7 +60,11 @@ def admin_client():
         from src.api import create_app
         app = create_app()
 
-        from src.api.middleware import get_current_user
+        from src.api.deps import get_profile_generator, get_rag_chain
+        from src.api.security import get_current_user
+
+        app.dependency_overrides[get_rag_chain] = lambda: MagicMock()
+        app.dependency_overrides[get_profile_generator] = lambda: MagicMock()
         app.dependency_overrides[get_current_user] = lambda: _FAKE_ADMIN
 
         with TestClient(app) as c:
@@ -101,17 +109,11 @@ class TestRoot:
 class TestSearch:
     def test_search_returns_empty(self, client):
         """Search is a stub — should return an empty result list."""
-        from src.api.deps import get_rag_chain
-        mock_chain = MagicMock()
-
-        from src.api import create_app
-        # Use the existing client's app
-        with patch("src.api.deps._rag_chain", mock_chain):
-            resp = client.post("/api/v1/search", json={"query": "test"})
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["query"] == "test"
-            assert data["results"] == []
+        resp = client.post("/api/v1/search", json={"query": "test"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["query"] == "test"
+        assert data["results"] == []
 
 
 # ---------------------------------------------------------------------------
@@ -134,18 +136,17 @@ class TestEmbeddingsCore:
         validate_embedding([0.1, 0.2, 0.3])
 
     def test_validate_embedding_empty(self):
-        from src.core.embeddings import validate_embedding, EmbeddingValidationError
+        from src.core.embeddings import EmbeddingValidationError, validate_embedding
         with pytest.raises(EmbeddingValidationError, match="empty"):
             validate_embedding([])
 
     def test_validate_embedding_all_zeros(self):
-        from src.core.embeddings import validate_embedding, EmbeddingValidationError
+        from src.core.embeddings import EmbeddingValidationError, validate_embedding
         with pytest.raises(EmbeddingValidationError, match="all zeros"):
             validate_embedding([0.0, 0.0, 0.0])
 
     def test_validate_embedding_nan(self):
-        import math
-        from src.core.embeddings import validate_embedding, EmbeddingValidationError
+        from src.core.embeddings import EmbeddingValidationError, validate_embedding
         with pytest.raises(EmbeddingValidationError, match="NaN"):
             validate_embedding([0.1, float("nan"), 0.3])
 
@@ -155,7 +156,7 @@ class TestEmbeddingsCore:
         validate_embeddings([[0.1, 0.2], [0.3, 0.4]], expected_dim=2)
 
     def test_validate_embeddings_dim_mismatch(self):
-        from src.core.embeddings import validate_embeddings, EmbeddingValidationError
+        from src.core.embeddings import EmbeddingValidationError, validate_embeddings
         with pytest.raises(EmbeddingValidationError, match="dimensions"):
             validate_embeddings([[0.1, 0.2], [0.3]], expected_dim=2)
 

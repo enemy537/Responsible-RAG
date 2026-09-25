@@ -4,8 +4,9 @@ schemas/common.py — Shared Pydantic models
 Reusable types used across multiple endpoint groups.
 """
 
+from typing import Any
+
 from pydantic import BaseModel, Field
-from typing import Optional, Any
 
 
 class ErrorResponse(BaseModel):
@@ -15,7 +16,7 @@ class ErrorResponse(BaseModel):
         ..., description="Human-readable error message.",
         example="Email already registered.",
     )
-    code: Optional[str] = Field(
+    code: str | None = Field(
         None, description="Machine-readable error code.",
         example="EMAIL_EXISTS",
     )
@@ -26,8 +27,8 @@ class PaginationParams(BaseModel):
 
     page: int = Field(default=1, ge=1, description="Page number (1-based).")
     limit: int = Field(default=20, ge=1, le=100, description="Items per page (max 100).")
-    sort_by: Optional[str] = Field(None, description="Field to sort by.")
-    sort_order: Optional[str] = Field("desc", description="'asc' or 'desc'.")
+    sort_by: str | None = Field(None, description="Field to sort by.")
+    sort_order: str | None = Field("desc", description="'asc' or 'desc'.")
 
 
 class PaginatedResponse(BaseModel):

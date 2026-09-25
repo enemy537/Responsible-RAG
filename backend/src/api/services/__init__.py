@@ -1,13 +1,11 @@
-"""
-services/__init__.py — Business logic layer
-=============================================
-Stateless service classes that encapsulate domain concerns.
-"""
+"""Business logic layer."""
 
-from src.api.services.source_service import SourceService
+from src.api.services.chat_service import ChatService
 from src.api.services.profile_generator_service import ProfileGeneratorService
+from src.api.services.source_service import SourceService
 
 __all__ = [
-    "SourceService",
+    "ChatService",
     "ProfileGeneratorService",
+    "SourceService",
 ]

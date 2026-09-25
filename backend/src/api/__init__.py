@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 # FastAPI is imported lazily inside create_app() so that the core modules
 # (db.models, core.config, etc.) can be imported without the web framework.
 from fastapi import FastAPI
+
 from src.api.routes import router as api_router
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,8 @@ def create_app():
     from fastapi import FastAPI
     from fastapi.middleware.cors import CORSMiddleware
 
+    from src.api.errors import register_exception_handlers
+
     app = FastAPI(
         title="Responsible RAG API",
         description=(
@@ -72,6 +75,8 @@ def create_app():
         # docs_url=None,
         # redoc_url=None,
     )
+
+    register_exception_handlers(app)
 
     # ── Middleware ────────────────────────────────────────────────────────────
     app.add_middleware(

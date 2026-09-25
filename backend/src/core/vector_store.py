@@ -16,7 +16,6 @@ responses (NaN, all-zeros, wrong dimensions).
 """
 
 import logging
-from typing import Optional
 
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
@@ -34,8 +33,12 @@ from qdrant_client.models import (
 )
 
 from src.core.chunker import SmartChunker
-from src.core.config import Settings
-from src.core.embeddings import EmbeddingValidationError, validate_embedding
+from src.core.config import Settings, get_settings
+from src.core.embeddings import (
+    EmbeddingFactory,
+    EmbeddingValidationError,
+    validate_embedding,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -138,9 +141,24 @@ class KnowledgeBase:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
+    @property
+    def embedding_function(self):
+        """The embedding function shared by ingestion and retrieval."""
+        return self._embedding_function
+
     def as_retriever(self, k: int = 5) -> BaseRetriever:
         """Return a LangChain-compatible retriever backed by Qdrant."""
         return self._vector_store.as_retriever(search_kwargs={"k": k})
+
+    def similarity_search_with_score(
+        self, query: str, k: int
+    ) -> list[tuple[Document, float]]:
+        """Dense search returning ``(document, score)`` pairs.
+
+        The collection uses COSINE distance, so a *higher* score means the
+        document is more similar to the query.
+        """
+        return self._vector_store.similarity_search_with_score(query, k=k)
 
     def get_all_documents(self) -> list[Document]:
         """Return every document currently stored in the Qdrant collection.
@@ -253,7 +271,7 @@ class KnowledgeBase:
         logger.info("Deleted source %s", source_id)
         return True
 
-    def get_source(self, source_id: str) -> Optional[dict]:
+    def get_source(self, source_id: str) -> dict | None:
         """Return the source metadata for *source_id* (from the first chunk)."""
         results = self._client.query_points(
             collection_name=self._collection_name,
@@ -470,4 +488,24 @@ class KnowledgeBase:
                 )
             else:
                 raise
+
+
+# Process-wide instance
+
+_shared_knowledge_base: KnowledgeBase | None = None
+
+
+def get_shared_knowledge_base() -> KnowledgeBase:
+    """Return the per-process cached :class:`KnowledgeBase`.
+
+    Each worker process keeps its own instance; Qdrant handles concurrency
+    server-side, so no locking is required.
+    """
+    global _shared_knowledge_base
+    if _shared_knowledge_base is None:
+        settings = get_settings()
+        _shared_knowledge_base = KnowledgeBase(
+            settings, EmbeddingFactory.create(settings)
+        )
+    return _shared_knowledge_base
 

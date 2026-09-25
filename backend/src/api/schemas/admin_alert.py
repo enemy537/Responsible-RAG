@@ -5,8 +5,8 @@ Used by the admin dashboard to surface system alerts such as embedding
 API quota cooldowns.
 """
 
+
 from pydantic import BaseModel, Field
-from typing import Optional
 
 
 class AdminAlertResponse(BaseModel):
@@ -17,7 +17,7 @@ class AdminAlertResponse(BaseModel):
     severity: str = Field("info", description="'info', 'warning', or 'critical'.")
     title: str = Field("", description="Short alert title.")
     message: str = Field("", description="Detailed alert message.")
-    cooldown_until: Optional[str] = Field(None, description="ISO-8601 timestamp of cooldown expiry.")
+    cooldown_until: str | None = Field(None, description="ISO-8601 timestamp of cooldown expiry.")
     timestamp: str = Field("", description="ISO-8601 timestamp when the alert was created.")
     resolved: str = Field("false", description="'true' if the alert has been dismissed.")
 

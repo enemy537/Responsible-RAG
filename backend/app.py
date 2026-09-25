@@ -1,22 +1,13 @@
-"""
-app.py — FastAPI application entry point
-=========================================
-Run locally:
-    uvicorn app:app --reload --port 8000
+"""FastAPI application entry point.
 
-Run via Docker:
-    docker compose up
-
-Low-memory notes:
-    - RAG chain is loaded lazily (not at import time).
-    - Use async endpoints so a single process handles many concurrent requests.
-    - Avoid storing large objects in memory per-request.
+Run locally:  uvicorn app:app --reload --port 8000
+Run via Docker:  docker compose up
 """
 
 from dotenv import load_dotenv
 
-load_dotenv()  # Must happen before any src imports that read env vars
+load_dotenv()  # Must run before importing anything that reads env vars
 
-from src.api import create_app
+from src.api import create_app  # noqa: E402
 
 app = create_app()

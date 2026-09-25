@@ -11,7 +11,6 @@ Low-memory strategy:
 """
 
 import logging
-from typing import Optional
 
 from src.core.config import get_settings
 from src.core.embeddings import EmbeddingFactory
@@ -29,7 +28,7 @@ class ProfileGeneratorService:
     """
 
     def __init__(self):
-        self._augmenter: Optional[ProfileAugmenter] = None
+        self._augmenter: ProfileAugmenter | None = None
 
     # ── Lazy init ─────────────────────────────────────────────────────────────
 
@@ -54,7 +53,7 @@ class ProfileGeneratorService:
     def generate_prompt(
         self,
         *,
-        user_profile: Optional[dict[str, str]] = None,
+        user_profile: dict[str, str] | None = None,
         user_query: str = "",
         retrieved_documents: str = "",
     ) -> str:
@@ -64,7 +63,7 @@ class ProfileGeneratorService:
         Parameters
         ----------
         user_profile:
-            Demographic data (keys match ``_STANDARD_PROFILE`` in
+            Demographic data (keys match ``STANDARD_PROFILE`` in
             ``src.core.profiles``).  Missing keys fall back to defaults.
         user_query:
             The user's question.

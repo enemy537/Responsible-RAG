@@ -52,7 +52,7 @@ export default function AdminDashboardPage() {
       setError(null);
       try {
         const [statsData, sourcesData, userStatsData] = await Promise.all([
-          api.sources.stats(),
+          api.dashboard.stats(),
           api.sources.list(1, 5),
           api.users.stats(),
         ]);

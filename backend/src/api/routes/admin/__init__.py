@@ -8,10 +8,11 @@ Usage:
 """
 
 from fastapi import APIRouter
+
+from src.api.routes.admin.alerts import router as alerts_router
 from src.api.routes.admin.dashboard import router as dashboard_router
 from src.api.routes.admin.sources import router as sources_router
 from src.api.routes.admin.users import router as users_router
-from src.api.routes.admin.alerts import router as alerts_router
 
 admin_router = APIRouter()
 

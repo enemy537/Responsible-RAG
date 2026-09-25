@@ -9,7 +9,7 @@ import { SourceTypeSelector } from '@/components/admin/SourceTypeSelector';
 import { FileUploadZone } from '@/components/admin/FileUploadZone';
 import { UrlInputCard } from '@/components/admin/UrlInputCard';
 import { MetadataForm } from '@/components/admin/MetadataForm';
-import { api, BASE_URL, _readAuthToken } from '@/lib/api';
+import { api } from '@/lib/api';
 import type { SourceType } from '@/types/source';
 import type { SourceMetadataFormData } from '@/lib/schemas/source.schema';
 import type { ExtractedMetadata } from '@/lib/utils/metadataExtractor';

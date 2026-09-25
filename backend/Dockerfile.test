@@ -1,0 +1,34 @@
+# =============================================================================
+# Dockerfile.test — dev-only test image
+# =============================================================================
+# Extends the production backend image with pytest so the suite runs in the
+# exact same dependency set that ships to production.
+#
+# Build the base image first, then this one:
+#   docker build -f backend/Dockerfile      -t rag-backend:local .
+#   docker build -f backend/Dockerfile.test -t rag-backend:test  .
+#
+# `tests/` is excluded by .dockerignore, so the suite is mounted at run time
+# (see scripts/docker-tests.sh).
+#
+# Build:
+#   docker build -f backend/Dockerfile      -t rag-backend:local .
+#   docker build -f backend/Dockerfile.test -t rag-backend:test  .
+#
+# Run (reaches Qdrant/Mongo on the host via --network host):
+#   docker run --rm --network host \
+#     -e TEST_QDRANT_URL=http://127.0.0.1:6333 \
+#     -e TEST_MONGO_URI=mongodb://127.0.0.1:27017/responsible_rag_refactor_test \
+#     -v "$PWD/tests:/app/tests:ro" -e PYTHONDONTWRITEBYTECODE=1 \
+#     rag-backend:test
+# =============================================================================
+
+FROM rag-backend:local
+
+USER root
+
+RUN pip install --no-cache-dir --quiet pytest
+
+WORKDIR /app
+
+CMD ["python", "-m", "pytest", "-q", "-p", "no:cacheprovider", "/app/tests"]

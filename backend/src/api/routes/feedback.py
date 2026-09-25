@@ -6,16 +6,17 @@ Endpoints:
     POST /api/v1/feedback          — Submit general feedback
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from src.api.schemas.feedback import (
-    MessageFeedbackRequest,
-    FeedbackSubmitRequest,
-    FeedbackResponse,
-)
-from src.api.middleware import get_current_user
+
 from src.api.db.database import get_database
+from src.api.schemas.feedback import (
+    FeedbackResponse,
+    FeedbackSubmitRequest,
+    MessageFeedbackRequest,
+)
+from src.api.security import get_current_user
 
 router = APIRouter()
 
@@ -41,7 +42,7 @@ async def submit_message_feedback(
         "rating": body.rating,
         "comment": body.comment,
         "feedback_type": f"thumbs_{body.rating}",
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     result = db["feedback"].insert_one(doc)
     return FeedbackResponse(id=str(result.inserted_id), status="recorded")
@@ -67,7 +68,7 @@ async def submit_general_feedback(
         "subject": body.subject,
         "message": body.message,
         "include_anonymous_data": body.include_anonymous_data,
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(UTC).isoformat(),
     }
     result = db["feedback"].insert_one(doc)
     return FeedbackResponse(id=str(result.inserted_id), status="recorded")

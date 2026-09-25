@@ -1,89 +1,170 @@
-"""
-retrievers.py — Ensemble retriever factory
-============================================
-Combines a dense vector-similarity retriever with a sparse BM25 keyword
-retriever via :class:`EnsembleRetriever`.
+"""Hybrid retrieval that returns only documents that are actually relevant.
 
-Rationale
----------
-* **Dense (vector)**: Captures semantic similarity — good at paraphrasing and
-  concept-level matching.
-* **Sparse (BM25)**: Captures exact keyword overlap — good at proper nouns,
-  acronyms, and rare domain-specific terms that might be underrepresented in
-  the embedding space.
-* **Ensemble**: Weighted reciprocal-rank fusion of both result lists gives the
-  best of both retrieval strategies.
+Dense (vector) hits capture semantic similarity; BM25 hits capture exact
+keyword overlap. The two ranked lists are combined with reciprocal-rank fusion,
+then filtered:
 
-Default weights (configurable via Settings)
--------------------------------------------
-  vector 0.7 + BM25 0.3 = 1.0
+* a dense hit must reach ``retrieval_min_relevance`` (cosine similarity), and
+* a keyword-only hit must reach ``bm25_min_relative_score`` of the best BM25
+  score in the same query.
 
-Usage
------
-    ensemble = RetrieverFactory.build_ensemble(
-        vec_retriever=kb.as_retriever(k=settings.vec_retriever_k),
-        all_docs=kb.get_all_documents(),
-        settings=settings,
-    )
+The result is "up to n": **however many documents clear the bar (possibly
+none), never more than ``retrieval_max_docs``**. An empty result is a valid
+outcome — callers then answer without retrieved context.
 """
 
+import hashlib
 import logging
 
-from langchain_classic.retrievers.ensemble import EnsembleRetriever
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
-from langchain_core.retrievers import BaseRetriever
 
 from src.core.config import Settings
+from src.core.vector_store import KnowledgeBase
 
 logger = logging.getLogger(__name__)
 
 
+def _document_key(document: Document) -> str:
+    """Stable identity for de-duplicating hits across both retrievers."""
+    digest = hashlib.sha1(
+        document.page_content.encode("utf-8", errors="ignore")
+    ).hexdigest()[:16]
+    return f"{document.metadata.get('source_id', '')}:{digest}"
+
+
+class RetrievedDocument:
+    """A document plus the scores that decided its inclusion."""
+
+    __slots__ = ("document", "dense_score", "fused_score")
+
+    def __init__(
+        self, document: Document, dense_score: float | None, fused_score: float
+    ) -> None:
+        self.document = document
+        self.dense_score = dense_score
+        self.fused_score = fused_score
+
+
+class RelevanceRetriever:
+    """Retrieves up to ``max_docs`` relevant documents for a query."""
+
+    #: Reciprocal-rank-fusion constant (standard default).
+    RRF_K = 60
+
+    def __init__(
+        self,
+        knowledge_base: KnowledgeBase,
+        settings: Settings,
+        all_docs: list[Document] | None = None,
+    ) -> None:
+        self._knowledge_base = knowledge_base
+        self._candidate_k = max(settings.vec_retriever_k, settings.bm25_retriever_k)
+        self._max_docs = settings.retrieval_max_docs
+        self._min_relevance = settings.retrieval_min_relevance
+        self._bm25_min_relative = settings.bm25_min_relative_score
+        self._vec_weight = settings.vec_weight
+        self._bm25_weight = settings.bm25_weight
+
+        corpus = all_docs or []
+        if corpus:
+            self._bm25: BM25Retriever | None = BM25Retriever.from_documents(
+                corpus, search_kwargs={"k": settings.bm25_retriever_k}
+            )
+        else:
+            logger.warning(
+                "No documents available — falling back to dense-only retrieval."
+            )
+            self._bm25 = None
+
+    def retrieve(self, query: str) -> list[Document]:
+        """Return the relevant documents for *query* (possibly none)."""
+        return [hit.document for hit in self.retrieve_scored(query)]
+
+    def retrieve_scored(self, query: str) -> list[RetrievedDocument]:
+        """Return relevant documents with the scores that qualified them."""
+        documents: dict[str, Document] = {}
+        fused: dict[str, float] = {}
+        dense_scores: dict[str, float] = {}
+
+        dense_hits = self._knowledge_base.similarity_search_with_score(
+            query, k=self._candidate_k
+        )
+        for rank, (document, score) in enumerate(dense_hits):
+            key = _document_key(document)
+            documents.setdefault(key, document)
+            dense_scores[key] = score
+            fused[key] = fused.get(key, 0.0) + self._vec_weight / (
+                self.RRF_K + rank + 1
+            )
+
+        sparse_hits = self._ranked_bm25_hits(query)
+        best_sparse = sparse_hits[0][1] if sparse_hits else 0.0
+        keyword_relevance: dict[str, float] = {}
+        for rank, (document, score) in enumerate(sparse_hits):
+            key = _document_key(document)
+            documents.setdefault(key, document)
+            fused[key] = fused.get(key, 0.0) + self._bm25_weight / (
+                self.RRF_K + rank + 1
+            )
+            if key not in dense_scores and best_sparse > 0:
+                keyword_relevance[key] = score / best_sparse
+
+        results: list[RetrievedDocument] = []
+        for key, document in documents.items():
+            similarity = dense_scores.get(key)
+            if similarity is not None:
+                keep = similarity >= self._min_relevance
+            else:
+                keep = keyword_relevance.get(key, 0.0) >= self._bm25_min_relative
+            if keep:
+                results.append(RetrievedDocument(document, similarity, fused[key]))
+
+        results.sort(key=lambda hit: hit.fused_score, reverse=True)
+        if len(results) > self._max_docs:
+            logger.debug(
+                "Retrieved %d relevant documents — capping at %d.",
+                len(results),
+                self._max_docs,
+            )
+        return results[: self._max_docs]
+
+    def _ranked_bm25_hits(self, query: str) -> list[tuple[Document, float]]:
+        """Return ``(document, bm25 score)`` pairs, best first."""
+        if self._bm25 is None:
+            return []
+        try:
+            scores = self._bm25.vectorizer.get_scores(
+                self._bm25.preprocess_func(query)
+            )
+            ranked = sorted(
+                zip(self._bm25.docs, scores, strict=True),
+                key=lambda pair: pair[1],
+                reverse=True,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("BM25 scoring failed (%s) — using dense results only.", exc)
+            return []
+
+        return [
+            (document, float(score)) for document, score in ranked[: self._candidate_k]
+        ]
+
+
 class RetrieverFactory:
-    """Static factory for building the ensemble retriever."""
+    """Builds the application's retriever from settings."""
 
     @staticmethod
-    def build_ensemble(
-        vec_retriever: BaseRetriever,
+    def build(
+        knowledge_base: KnowledgeBase,
         all_docs: list[Document],
         settings: Settings,
-    ) -> EnsembleRetriever:
-        """
-        Build and return a weighted ensemble of vector + BM25 retrievers.
-
-        Parameters
-        ----------
-        vec_retriever:
-            Pre-built vector-similarity retriever (e.g. from
-            :class:`KnowledgeBase`'s ``as_retriever()``).
-        all_docs:
-            The full document corpus for building the BM25 index (in-memory).
-        settings:
-            Application settings — supplies ``bm25_retriever_k``,
-            ``vec_weight``, and ``bm25_weight``.
-
-        Returns
-        -------
-        EnsembleRetriever
-            Ready-to-use ensemble retriever.
-        """
-        if not all_docs:
-            logger.warning(
-                "No documents in the vector store — BM25 retriever will be "
-                "disabled; using vector-only retrieval."
-            )
-            return vec_retriever
-
-        bm25 = BM25Retriever.from_documents(
-            all_docs,
-            search_kwargs={"k": settings.bm25_retriever_k},
-        )
+    ) -> RelevanceRetriever:
+        """Return a relevance-filtered hybrid retriever."""
         logger.info(
-            "Ensemble retriever ready (vec_weight=%.1f, bm25_weight=%.1f).",
-            settings.vec_weight,
-            settings.bm25_weight,
+            "Retriever ready (candidates=%d, max_docs=%d, min_relevance=%.2f).",
+            max(settings.vec_retriever_k, settings.bm25_retriever_k),
+            settings.retrieval_max_docs,
+            settings.retrieval_min_relevance,
         )
-        return EnsembleRetriever(
-            retrievers=[vec_retriever, bm25],
-            weights=[settings.vec_weight, settings.bm25_weight],
-        )
+        return RelevanceRetriever(knowledge_base, settings, all_docs)

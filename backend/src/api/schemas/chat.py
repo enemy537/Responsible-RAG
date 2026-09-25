@@ -4,9 +4,8 @@ schemas/chat.py — Chat & conversation models
 Mirrors the frontend's ``types/chat.ts`` interfaces.
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional
 
+from pydantic import BaseModel, Field
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Embedded objects
@@ -20,12 +19,12 @@ class CitationSchema(BaseModel):
     source_title: str = Field("", description="Document title.")
     source_type: str = Field("pdf", description="Type of source (pdf, text, webpage, etc.).")
     authors: list[str] = Field(default_factory=list, description="Author names.")
-    publication_date: Optional[str] = Field(None, description="Publication date (ISO-8601).")
-    publisher: Optional[str] = Field(None, description="Publisher name.")
+    publication_date: str | None = Field(None, description="Publication date (ISO-8601).")
+    publisher: str | None = Field(None, description="Publisher name.")
     url: str = Field("", description="Source URL.")
     doi: str = Field("", description="Digital Object Identifier.")
-    language: Optional[str] = Field(None, description="Language code (e.g. 'en', 'fr').")
-    description: Optional[str] = Field(None, description="Document summary.")
+    language: str | None = Field(None, description="Language code (e.g. 'en', 'fr').")
+    description: str | None = Field(None, description="Document summary.")
     tags: list[str] = Field(default_factory=list, description="Tags / keywords.")
     content_sensitivity: str = Field("low", description="'low', 'medium', or 'high'.")
     excerpt: str = Field(..., description="Relevant excerpt from the source.")
@@ -44,10 +43,10 @@ class ChatRequest(BaseModel):
         description="The user's question.",
         example="What are my rights under the Canadian Charter?",
     )
-    conversation_id: Optional[str] = Field(
+    conversation_id: str | None = Field(
         None, description="Existing conversation ID for multi-turn context.",
     )
-    profile_key: Optional[str] = Field(
+    profile_key: str | None = Field(
         None, description="Audience profile key (e.g. 'senior', 'lgbt_teen').",
     )
 
@@ -65,7 +64,7 @@ class ChatResponse(BaseModel):
     message_id: str = Field(
         ..., description="The assistant message ID.",
     )
-    profile_key: Optional[str] = Field(None)
+    profile_key: str | None = Field(None)
 
 
 class ChatStreamRequest(BaseModel):
@@ -75,10 +74,10 @@ class ChatStreamRequest(BaseModel):
         ..., min_length=1, max_length=4096,
         description="The user's question.",
     )
-    conversation_id: Optional[str] = Field(
+    conversation_id: str | None = Field(
         None, description="Existing conversation ID.",
     )
-    profile_key: Optional[str] = Field(
+    profile_key: str | None = Field(
         None, description="Optional audience profile key.",
     )
 
@@ -90,11 +89,11 @@ class ChatStreamRequest(BaseModel):
 class CreateConversationRequest(BaseModel):
     """Start a new conversation."""
 
-    title: Optional[str] = Field(
+    title: str | None = Field(
         None, max_length=200,
         description="Optional title (auto-generated from first message if omitted).",
     )
-    profile_key: Optional[str] = Field(
+    profile_key: str | None = Field(
         None, description="Audience profile for this conversation.",
     )
 
@@ -113,8 +112,8 @@ class ConversationListItem(BaseModel):
 
     id: str = Field(..., description="Conversation ID.")
     title: str = Field(..., description="Conversation title.")
-    last_message: Optional[str] = Field(None, description="Preview of last message.")
-    last_message_at: Optional[str] = Field(None, description="ISO-8601 timestamp.")
+    last_message: str | None = Field(None, description="Preview of last message.")
+    last_message_at: str | None = Field(None, description="ISO-8601 timestamp.")
     created_at: str = Field(..., description="ISO-8601 timestamp.")
     message_count: int = Field(0)
 
@@ -135,7 +134,7 @@ class ConversationResponse(BaseModel):
 
     id: str = Field(...)
     title: str = Field(...)
-    profile_key: Optional[str] = Field(None)
+    profile_key: str | None = Field(None)
     messages: list["MessageResponse"] = Field(default_factory=list)
     message_count: int = Field(0)
     created_at: str = Field(...)

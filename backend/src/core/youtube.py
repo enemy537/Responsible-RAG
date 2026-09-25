@@ -6,12 +6,11 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Optional
 
 import ffmpeg
 
-from src.core.transcriber import transcribe, transcribe_async
 from src.core.cloudflare import Cloudflare
+from src.core.transcriber import transcribe
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 def _try_pytubefix_download(
     url: str, output_dir: str | Path,
-) -> Optional[str]:
+) -> str | None:
     """
     Attempt to download audio via pytubefix with PoToken strategies.
 
@@ -72,7 +71,7 @@ def _try_pytubefix_download(
     return None
 
 
-def _try_ytdlp_download(url: str, output_dir: str | Path) -> Optional[str]:
+def _try_ytdlp_download(url: str, output_dir: str | Path) -> str | None:
     """
     Fallback: download audio via yt-dlp.
 
@@ -160,7 +159,7 @@ def extract_audio(url: str, output_dir: str | Path) -> str:
     )
 
 
-def transcribe_youtube(url: str, cf: Optional[Cloudflare] = None) -> str:
+def transcribe_youtube(url: str, cf: Cloudflare | None = None) -> str:
     temp_dir = tempfile.mkdtemp()
     try:
         wav = extract_audio(url, temp_dir)
@@ -169,6 +168,6 @@ def transcribe_youtube(url: str, cf: Optional[Cloudflare] = None) -> str:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-async def transcribe_youtube_async(url: str, cf: Optional[Cloudflare] = None) -> str:
+async def transcribe_youtube_async(url: str, cf: Cloudflare | None = None) -> str:
     """Async variant — runs the full download+transcribe pipeline in a thread pool."""
     return await asyncio.to_thread(transcribe_youtube, url, cf)

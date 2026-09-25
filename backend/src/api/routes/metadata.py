@@ -10,7 +10,6 @@ Endpoints:
 """
 
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -21,16 +20,16 @@ router = APIRouter()
 
 
 class MetadataResponse(BaseModel):
-    title: Optional[str] = None
+    title: str | None = None
     authors: list[str] = []
-    publicationDate: Optional[str] = None
-    publisher: Optional[str] = None
-    description: Optional[str] = None
-    thumbnailUrl: Optional[str] = None
-    language: Optional[str] = None
+    publicationDate: str | None = None
+    publisher: str | None = None
+    description: str | None = None
+    thumbnailUrl: str | None = None
+    language: str | None = None
 
 
-def _get_youtube_video_id(url: str) -> Optional[str]:
+def _get_youtube_video_id(url: str) -> str | None:
     """Extract the video ID from various YouTube URL formats."""
     import re
     # youtube.com/watch?v=...

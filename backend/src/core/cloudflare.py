@@ -1,7 +1,6 @@
 """Cloudflare AI API client."""
 
 import os
-from typing import Optional
 
 import requests
 
@@ -11,8 +10,8 @@ class Cloudflare:
 
     def __init__(
         self,
-        api_token: Optional[str] = None,
-        account_id: Optional[str] = None,
+        api_token: str | None = None,
+        account_id: str | None = None,
     ) -> None:
         self.api_token = api_token or os.getenv("CLOUDFLARE_API_TOKEN", "")
         self.account_id = account_id or os.getenv("CLOUDFLARE_ACCOUNT_ID", "")

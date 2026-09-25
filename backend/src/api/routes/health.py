@@ -10,6 +10,7 @@ Endpoints:
 """
 
 from fastapi import APIRouter, Depends
+
 from src.api.deps import get_settings
 from src.core.config import Settings
 

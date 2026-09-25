@@ -3,10 +3,8 @@
 import asyncio
 import re
 from pathlib import Path
-from typing import Optional
 
 from src.core.cloudflare import Cloudflare
-
 
 _WHISPER_MODEL = "@cf/openai/whisper-tiny-en"
 
@@ -45,7 +43,7 @@ def _extract_text(response: dict) -> str:
     return ""
 
 
-def transcribe(audio_path: str | Path, cf: Optional[Cloudflare] = None) -> str:
+def transcribe(audio_path: str | Path, cf: Cloudflare | None = None) -> str:
     cf = cf or Cloudflare()
     path = Path(audio_path)
     mime = _AUDIO_MIME.get(path.suffix.lower(), "application/octet-stream")
@@ -55,6 +53,6 @@ def transcribe(audio_path: str | Path, cf: Optional[Cloudflare] = None) -> str:
     return _extract_text(response)
 
 
-async def transcribe_async(audio_path: str | Path, cf: Optional[Cloudflare] = None) -> str:
+async def transcribe_async(audio_path: str | Path, cf: Cloudflare | None = None) -> str:
     """Async variant — runs the I/O-bound transcription in a thread pool."""
     return await asyncio.to_thread(transcribe, audio_path, cf)

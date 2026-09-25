@@ -29,12 +29,15 @@ export function ConsentStep({ onComplete }: ConsentStepProps) {
   const setProfileMode = useConsentStore((s) => s.setProfileMode);
   const researchDataConsent = useConsentStore((s) => s.researchDataConsent);
   const setResearchDataConsent = useConsentStore((s) => s.setResearchDataConsent);
+  const chatHistoryConsent = useConsentStore((s) => s.chatHistoryConsent);
+  const setChatHistoryConsent = useConsentStore((s) => s.setChatHistoryConsent);
   const [selectedMode, setSelectedMode] = useState<ProfileMode | null>(
     profileMode
   );
   const [researchConsent, setResearchConsent] = useState(
     researchDataConsent
   );
+  const [saveHistory, setSaveHistory] = useState(chatHistoryConsent);
   const [fullLearnOpen, setFullLearnOpen] = useState(false);
   const [generalLearnOpen, setGeneralLearnOpen] = useState(false);
 
@@ -47,7 +50,16 @@ export function ConsentStep({ onComplete }: ConsentStepProps) {
       setProfileMode(selectedMode);
     }
     setResearchDataConsent(researchConsent);
-  }, [selectedMode, researchConsent, setProfileMode, setResearchDataConsent, onComplete]);
+    setChatHistoryConsent(saveHistory);
+  }, [
+    selectedMode,
+    researchConsent,
+    saveHistory,
+    setProfileMode,
+    setResearchDataConsent,
+    setChatHistoryConsent,
+    onComplete,
+  ]);
 
   const handleSelectMode = (mode: ProfileMode) => {
     setSelectedMode(mode);
@@ -220,6 +232,28 @@ export function ConsentStep({ onComplete }: ConsentStepProps) {
           </Label>
           <p id="research-consent-desc" className="text-xs text-muted-foreground">
             This data is always anonymized and never linked to your identity.
+          </p>
+        </div>
+      </div>
+
+      {/* Chat history consent checkbox */}
+      <div className="flex items-start gap-3 pt-2">
+        <Checkbox
+          id="chat-history-consent"
+          checked={saveHistory}
+          onCheckedChange={(checked) => setSaveHistory(checked === true)}
+          aria-describedby="chat-history-consent-desc"
+        />
+        <div className="grid gap-1 leading-none">
+          <Label
+            htmlFor="chat-history-consent"
+            className="text-sm font-medium leading-relaxed cursor-pointer"
+          >
+            I allow my conversations to be saved so I can revisit them
+          </Label>
+          <p id="chat-history-consent-desc" className="text-xs text-muted-foreground">
+            If you turn this off, conversations are kept only for the current
+            session and then discarded.
           </p>
         </div>
       </div>

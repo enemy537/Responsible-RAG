@@ -4,9 +4,8 @@ schemas/source.py — Knowledge-base source documents
 Metadata plus lightweight status tracking (stored in Qdrant payload).
 """
 
-from pydantic import BaseModel, Field
-from typing import Optional
 
+from pydantic import BaseModel, Field
 
 SourceType = str   # "pdf" | "text" | "audio" | "webpage" | "youtube"
 ContentSensitivity = str  # "low" | "medium" | "high"
@@ -23,33 +22,33 @@ class SourceCreateRequest(BaseModel):
     authors: list[str] = Field(
         default_factory=list, description="Author names.",
     )
-    publication_date: Optional[str] = Field(None, description="Publication date (ISO-8601 or year).")
-    publisher: Optional[str] = Field(None, max_length=200)
+    publication_date: str | None = Field(None, description="Publication date (ISO-8601 or year).")
+    publisher: str | None = Field(None, max_length=200)
     url: str = Field(..., min_length=1, description="Source URL (required).")
-    doi: Optional[str] = Field(None, description="Digital Object Identifier.")
-    language: Optional[str] = Field(None, description="Language code (e.g. 'en', 'fr').")
-    description: Optional[str] = Field(None, max_length=2000)
+    doi: str | None = Field(None, description="Digital Object Identifier.")
+    language: str | None = Field(None, description="Language code (e.g. 'en', 'fr').")
+    description: str | None = Field(None, max_length=2000)
     tags: list[str] = Field(default_factory=list)
     content_sensitivity: str = Field(
         "low", description="'low', 'medium', or 'high'.",
     )
-    internal_notes: Optional[str] = Field(None, max_length=2000)
+    internal_notes: str | None = Field(None, max_length=2000)
 
 
 class SourceUpdateRequest(BaseModel):
     """Partial update to a source document's metadata."""
 
-    title: Optional[str] = Field(None, max_length=300)
-    authors: Optional[list[str]] = Field(None)
-    publication_date: Optional[str] = Field(None)
-    publisher: Optional[str] = Field(None, max_length=200)
-    url: Optional[str] = Field(None)
-    doi: Optional[str] = Field(None)
-    language: Optional[str] = Field(None)
-    description: Optional[str] = Field(None, max_length=2000)
-    tags: Optional[list[str]] = Field(None)
-    content_sensitivity: Optional[str] = Field(None)
-    internal_notes: Optional[str] = Field(None, max_length=2000)
+    title: str | None = Field(None, max_length=300)
+    authors: list[str] | None = Field(None)
+    publication_date: str | None = Field(None)
+    publisher: str | None = Field(None, max_length=200)
+    url: str | None = Field(None)
+    doi: str | None = Field(None)
+    language: str | None = Field(None)
+    description: str | None = Field(None, max_length=2000)
+    tags: list[str] | None = Field(None)
+    content_sensitivity: str | None = Field(None)
+    internal_notes: str | None = Field(None, max_length=2000)
 
 
 class SourceResponse(BaseModel):
@@ -59,17 +58,17 @@ class SourceResponse(BaseModel):
     title: str = Field(...)
     source_type: str = Field(...)
     authors: list[str] = Field(default_factory=list)
-    publication_date: Optional[str] = None
-    publisher: Optional[str] = None
+    publication_date: str | None = None
+    publisher: str | None = None
     url: str = Field("")
-    doi: Optional[str] = None
-    language: Optional[str] = None
-    description: Optional[str] = None
+    doi: str | None = None
+    language: str | None = None
+    description: str | None = None
     tags: list[str] = Field(default_factory=list)
     content_sensitivity: str = Field("low")
-    internal_notes: Optional[str] = None
+    internal_notes: str | None = None
     status: str = Field("indexed")
-    error_message: Optional[str] = None
+    error_message: str | None = None
     chunk_count: int = Field(0)
 
     model_config = {"populate_by_name": True}
@@ -91,13 +90,13 @@ class URLUploadRequest(BaseModel):
     title: str = Field(..., min_length=1, max_length=300, description="Source title.")
     source_type: str = Field("webpage", description="'webpage' or 'youtube'.")
     authors: list[str] = Field(default_factory=list)
-    publication_date: Optional[str] = Field(None)
-    publisher: Optional[str] = Field(None, max_length=200)
-    language: Optional[str] = Field(None)
-    description: Optional[str] = Field(None, max_length=2000)
+    publication_date: str | None = Field(None)
+    publisher: str | None = Field(None, max_length=200)
+    language: str | None = Field(None)
+    description: str | None = Field(None, max_length=2000)
     tags: list[str] = Field(default_factory=list)
     content_sensitivity: str = Field("low")
-    internal_notes: Optional[str] = Field(None, max_length=2000)
+    internal_notes: str | None = Field(None, max_length=2000)
 
 
 class YouTubeUploadRequest(BaseModel):
@@ -105,13 +104,13 @@ class YouTubeUploadRequest(BaseModel):
     url: str = Field(..., description="YouTube video URL.")
     title: str = Field(..., min_length=1, max_length=300, description="Source title.")
     authors: list[str] = Field(default_factory=list)
-    publication_date: Optional[str] = Field(None)
-    publisher: Optional[str] = Field(None, max_length=200)
-    language: Optional[str] = Field(None)
-    description: Optional[str] = Field(None, max_length=2000)
+    publication_date: str | None = Field(None)
+    publisher: str | None = Field(None, max_length=200)
+    language: str | None = Field(None)
+    description: str | None = Field(None, max_length=2000)
     tags: list[str] = Field(default_factory=list)
     content_sensitivity: str = Field("low")
-    internal_notes: Optional[str] = Field(None, max_length=2000)
+    internal_notes: str | None = Field(None, max_length=2000)
 
 
 class UploadResponse(BaseModel):

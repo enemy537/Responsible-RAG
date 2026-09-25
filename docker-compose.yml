@@ -1,40 +1,21 @@
 # =============================================================================
-# docker-compose.yml
+# docker-compose.yml — development stack
 # =============================================================================
 # Dev:     docker compose -f docker-compose.yml up --build -d
 # Prod:    docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 # Stop:    docker compose down
 # Logs:    docker compose logs -f <service>
+#
+# Caddy (the TLS reverse proxy) is defined in docker-compose.prod.yml, not here.
+# It binds the privileged ports 80/443 and requires a public domain, so it is
+# production infrastructure. In dev, reach the frontend on :3000 and the
+# backend on :8000 directly.
 # =============================================================================
-
-# ── Named volumes for services that don't use host bind mounts ──────────────
-volumes:
-  caddy_data:
-  caddy_config:
 
 services:
 
   # ---------------------------------------------------------------------------
-  # Caddy — Reverse proxy (handles HTTPS via Let's Encrypt automatically)
-  # ---------------------------------------------------------------------------
-  caddy:
-    image: caddy:2-alpine
-    container_name: rag-caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    env_file:
-      - .env
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - frontend
-      - backend
-  # ---------------------------------------------------------------------------
-  # qrant — Off-the-shelf, vector database on the host
+  # qdrant — Off-the-shelf, vector database on the host
   # ---------------------------------------------------------------------------
   qdrant:
     image: qdrant/qdrant:latest
@@ -65,19 +46,17 @@ services:
       MONGO_APP_USER: ${MONGO_APP_USER:-rag}
       MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:-ragpassword}
     volumes:
-      # Host-backed persistence: data survives container restarts & rebuilds
+      # Host-backed persistence: data survives container restarts & rebuilds.
+      # Must exist and be EMPTY for the init script below to run.
       - ../storage/mongo/data:/data/db
-      # Init script creates the app user + database on first run (empty DB only)
-      - ../storage/mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
-      # Entrypoint wrapper handles rough restores (copied WiredTiger files)
-      - ../storage/mongo/entrypoint-wrapper.sh:/entrypoint-wrapper.sh:ro
+      # First-run bootstrap: creates the application user inside the
+      # application database. Only executed while /data/db is empty.
+      - ./docker/mongo-init.js:/docker-entrypoint-initdb.d/01-init.js:ro
 
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet",
-             "--username", "${MONGO_APP_USER:-rag}",
-             "--password", "${MONGO_APP_PASSWORD:-ragpassword}",
-             "--authenticationDatabase", "${MONGO_DB:-responsible_rag}",
-             "--eval", "db.runCommand({ping:1})"]
+      # Liveness only. `ping` needs no credentials, so a wrong application
+      # password can no longer mask whether mongod itself has started.
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ping:1})"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -148,4 +127,5 @@ services:
       start_period: 30s
     # Run as appuser (UID 1000). Make sure ../storage/* directories are owned by 1000:1000
     # on the host (run: sudo chown -R 1000:1000 ..//storage).
-    user: "1000:1000"
+    user: "1000:1000"hand edited
+# hand edit

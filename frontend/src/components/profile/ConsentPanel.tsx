@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useConsentStore } from '@/stores/consentStore';
 import { useProfileStore } from '@/stores/profileStore';
+import { api } from '@/lib/api';
 import { getModeSwitchConfirmation } from '@/lib/utils/privacyHelpers';
 import { cn } from '@/lib/utils';
 
@@ -43,6 +44,15 @@ export function ConsentPanel() {
       consentStore.setProfileMode('full');
     }
     setShowModeDialog(false);
+  };
+
+  const handleChatHistoryChange = async (enabled: boolean) => {
+    consentStore.setChatHistoryConsent(enabled);
+    try {
+      await api.profile.updateConsent({ chat_history_consent: enabled });
+    } catch (err) {
+      console.error('Failed to save chat history preference', err);
+    }
   };
 
   return (
@@ -107,6 +117,28 @@ export function ConsentPanel() {
               id="research-consent"
               checked={consentStore.researchDataConsent}
               onCheckedChange={consentStore.setResearchDataConsent}
+            />
+          </div>
+
+          {/* Chat history storage toggle */}
+          <div className="flex items-center justify-between gap-4 py-2">
+            <div className="space-y-0.5">
+              <Label
+                htmlFor="chat-history-consent"
+                className="text-sm font-medium cursor-pointer"
+              >
+                Save chat history
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {consentStore.chatHistoryConsent
+                  ? 'Conversations are stored so you can revisit them'
+                  : 'Conversations are kept for this session only, then discarded'}
+              </p>
+            </div>
+            <Switch
+              id="chat-history-consent"
+              checked={consentStore.chatHistoryConsent}
+              onCheckedChange={handleChatHistoryChange}
             />
           </div>
 
