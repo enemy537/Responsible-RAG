@@ -62,6 +62,7 @@ def create_app():
     from fastapi.middleware.cors import CORSMiddleware
 
     from src.api.errors import register_exception_handlers
+    from src.api.request_context import REQUEST_ID_HEADER, RequestIdMiddleware
 
     app = FastAPI(
         title="Responsible RAG API",
@@ -79,12 +80,20 @@ def create_app():
     register_exception_handlers(app)
 
     # ── Middleware ────────────────────────────────────────────────────────────
+    # Added first, so CORS (added next) wraps it and still decorates the
+    # responses this middleware produces. Starlette prepends each added
+    # middleware, making the last addition the outermost layer.
+    app.add_middleware(RequestIdMiddleware)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],  # Restrict in production
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        # Correlate a user-visible error with a server log line: a custom
+        # response header is unreadable by cross-origin JS unless exposed.
+        expose_headers=[REQUEST_ID_HEADER],
     )
 
     # ── Routers ───────────────────────────────────────────────────────────────

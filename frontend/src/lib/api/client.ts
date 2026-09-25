@@ -9,6 +9,8 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** Server-side correlation id (``X-Request-ID``), when the API sent one. */
+    readonly requestId?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -33,7 +35,13 @@ function authHeaders(): Record<string, string> {
 
 async function raiseForStatus(res: Response): Promise<never> {
   const body = await res.json().catch(() => ({ detail: res.statusText }));
-  throw new ApiError(body.detail || `HTTP ${res.status}`, res.status);
+  // The id is in the body so it survives CORS and non-header-aware clients;
+  // the header is the fallback for responses that predate the body field.
+  const requestId =
+    (typeof body?.request_id === 'string' ? body.request_id : undefined) ??
+    res.headers.get('X-Request-ID') ??
+    undefined;
+  throw new ApiError(body.detail || `HTTP ${res.status}`, res.status, requestId);
 }
 
 /** Perform a JSON request and return the parsed response. */

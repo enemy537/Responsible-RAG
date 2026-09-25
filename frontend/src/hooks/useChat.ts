@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { useConsentStore } from '@/stores/consentStore';
 import { api, type ChatResponseDTO } from '@/lib/api';
-import { isQuotaError } from '@/lib/errors';
+import { describeChatError } from '@/lib/errors';
 import {
   toCitation,
   toConversation,
@@ -14,11 +14,6 @@ import {
 
 const TITLE_PREVIEW_LENGTH = 50;
 const LAST_MESSAGE_PREVIEW_LENGTH = 100;
-
-const QUOTA_ERROR_MESSAGE =
-  'The document search engine is temporarily unavailable due to an API quota limit. ' +
-  "I can still answer from my general knowledge, but responses won't include citations " +
-  'to specific sources. Please try again later for source-grounded answers.';
 
 export function useChat() {
   const chatStore = useChatStore();
@@ -88,14 +83,20 @@ export function useChat() {
           createdAt: new Date().toISOString(),
         });
       } catch (err) {
-        console.error('Chat API error', err);
+        // describeChatError maps the HTTP status to guidance the user can act
+        // on, and appends the server's correlation id so a report points at one
+        // log line. The full error stays in the console for the same reason.
+        const failure = describeChatError(err);
+        console.error('Chat API error', {
+          status: failure.status,
+          requestId: failure.requestId,
+          error: err,
+        });
         store.addMessage({
           id: `msg-${Date.now() + 1}`,
           conversationId: convId,
           role: 'assistant',
-          content: isQuotaError(err)
-            ? QUOTA_ERROR_MESSAGE
-            : 'Sorry, something went wrong. Please try again.',
+          content: failure.message,
           citations: [],
           createdAt: new Date().toISOString(),
         });
