@@ -4,7 +4,7 @@ import { useCallback } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { useConsentStore } from '@/stores/consentStore';
 import { api, type ChatResponseDTO } from '@/lib/api';
-import { describeChatError } from '@/lib/errors';
+import { describeChatError, isStaleConversationError } from '@/lib/errors';
 import {
   toCitation,
   toConversation,
@@ -23,58 +23,97 @@ export function useChat() {
     (c) => c.id === chatStore.activeConversationId
   );
 
+  /** Create a conversation, add it to the store and make it active. */
+  const startConversation = useCallback(async (preview: string): Promise<string | null> => {
+    try {
+      const conv = await api.conversations.create({});
+      const store = useChatStore.getState();
+      store.addConversation({
+        ...toConversation(conv),
+        lastMessage: preview.slice(0, LAST_MESSAGE_PREVIEW_LENGTH),
+        lastMessageAt: new Date().toISOString(),
+      });
+      store.setActiveConversationId(conv.id);
+      return conv.id;
+    } catch (err) {
+      console.error('Failed to create conversation', err);
+      return null;
+    }
+  }, []);
+
+  /** Show the user's message immediately, before the backend answers. */
+  const addUserMessage = useCallback((conversationId: string, content: string) => {
+    useChatStore.getState().addMessage({
+      id: `msg-user-${Date.now()}`,
+      conversationId,
+      role: 'user',
+      content,
+      citations: [],
+      createdAt: new Date().toISOString(),
+    });
+  }, []);
+
+  /** Ask the RAG backend one question inside an existing conversation. */
+  const ask = useCallback(
+    (question: string, conversationId: string) =>
+      api.chat.send({
+        question,
+        conversation_id: conversationId,
+        profile_key: consentStore.profileMode?.toLowerCase() ?? null,
+      }),
+    [consentStore.profileMode]
+  );
+
   /** Send a message to the RAG backend and store the response. */
   const sendMessage = useCallback(
     async (content: string): Promise<void> => {
-      const store = useChatStore.getState();
-      let convId = store.activeConversationId;
+      let convId = useChatStore.getState().activeConversationId;
 
       // Auto-create a conversation if none is active
       if (!convId) {
-        try {
-          const conv = await api.conversations.create({});
-          store.addConversation({
-            ...toConversation(conv),
-            lastMessage: content.slice(0, LAST_MESSAGE_PREVIEW_LENGTH),
-            lastMessageAt: new Date().toISOString(),
-          });
-          store.setActiveConversationId(conv.id);
-          convId = conv.id;
-        } catch (err) {
-          console.error('Failed to create conversation', err);
-          return;
-        }
+        convId = await startConversation(content);
+        if (!convId) return;
       }
 
       // Add the user message locally (optimistic)
-      store.addMessage({
-        id: `msg-${Date.now()}`,
-        conversationId: convId,
-        role: 'user',
-        content,
-        citations: [],
-        createdAt: new Date().toISOString(),
-      });
+      addUserMessage(convId, content);
 
       // Update the conversation title from the first message
-      const conv = store.conversations.find((c) => c.id === convId);
+      const conv = useChatStore.getState().conversations.find((c) => c.id === convId);
       if (conv && conv.title === 'New conversation') {
-        store.renameConversation(
+        useChatStore.getState().renameConversation(
           convId,
           content.slice(0, TITLE_PREVIEW_LENGTH) +
             (content.length > TITLE_PREVIEW_LENGTH ? '…' : '')
         );
       }
 
-      store.setStreaming(true);
+      useChatStore.getState().setStreaming(true);
       try {
-        const result: ChatResponseDTO = await api.chat.send({
-          question: content,
-          conversation_id: convId,
-          profile_key: consentStore.profileMode?.toLowerCase() ?? null,
-        });
+        let result: ChatResponseDTO;
+        try {
+          result = await ask(content, convId);
+        } catch (err) {
+          if (!isStaleConversationError(err)) throw err;
+          // The server cannot use this conversation id, so every retry in it
+          // would fail the same way. Start a fresh conversation, move the
+          // question into it, and answer there instead of dead-ending.
+          console.warn('Conversation rejected by the server - retrying in a new conversation', {
+            conversationId: convId,
+            error: err,
+          });
+          const staleId = convId;
+          const freshId = await startConversation(content);
+          if (!freshId) throw err;
+          const store = useChatStore.getState();
+          store.removeConversation(staleId);
+          store.setMessages([]);
+          convId = freshId;
+          addUserMessage(freshId, content);
+          result = await ask(content, freshId);
+        }
 
-        store.addMessage({
+        useChatStore.getState().addMessage({
           id: result.message_id,
           conversationId: result.conversation_id,
           role: 'assistant',
@@ -92,8 +131,8 @@ export function useChat() {
           requestId: failure.requestId,
           error: err,
         });
-        store.addMessage({
-          id: `msg-${Date.now() + 1}`,
+        useChatStore.getState().addMessage({
+          id: `msg-error-${Date.now()}`,
           conversationId: convId,
           role: 'assistant',
           content: failure.message,
@@ -101,10 +140,10 @@ export function useChat() {
           createdAt: new Date().toISOString(),
         });
       } finally {
-        store.setStreaming(false);
+        useChatStore.getState().setStreaming(false);
       }
     },
-    [consentStore.profileMode]
+    [addUserMessage, ask, startConversation]
   );
 
   /** Load the conversation list into the store. */

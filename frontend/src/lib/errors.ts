@@ -35,6 +35,23 @@ export function isQuotaError(error: unknown): boolean {
 }
 
 /**
+ * True when the server cannot use the conversation id we sent.
+ *
+ * Either the conversation is unknown (404), or the id cannot exist in the store
+ * the request was routed to (400). The second case is real: a conversation
+ * created while chat-history storage was off is stored in memory and gets an
+ * `eph-...` id, so if the user later turns history on, the same id is offered to
+ * the database-backed store, which only accepts ObjectIds.
+ *
+ * Both are recoverable by starting a new conversation.
+ */
+export function isStaleConversationError(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false;
+  if (error.status === 404) return true;
+  return error.status === 400 && /conversation/i.test(error.message);
+}
+
+/**
  * Append the reference a maintainer needs to find this failure in the logs.
  *
  * The server logs the same id with the traceback, so a user who copies this
@@ -81,8 +98,9 @@ export function describeChatError(error: unknown): ChatErrorInfo {
       );
     case 404:
       return withReference(
-        'This conversation is no longer stored on the server, so the message could not be added. ' +
-          'It may have expired or been deleted. Start a new chat to continue.',
+        'This conversation is no longer available, so the message could not be added. ' +
+          'It may have expired, been deleted, or belonged to a different history setting. ' +
+          'Start a new chat to continue.',
         status,
         requestId
       );

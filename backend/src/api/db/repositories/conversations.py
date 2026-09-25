@@ -2,12 +2,32 @@
 
 from datetime import UTC, datetime
 
-from src.api.db.repositories.base import MongoRepository, to_object_id
+from bson import ObjectId
+from bson.errors import InvalidId
+
+from src.api.db.repositories.base import MongoRepository
 from src.api.errors import NotFoundError
 
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _oid_or_none(value: str) -> ObjectId | None:
+    """Return *value* as an ``ObjectId``, or ``None`` if it cannot be one.
+
+    Ids are only ObjectIds in this collection. A conversation created while the
+    user had chat-history storage disabled lives in the in-memory repository and
+    looks like ``eph-...``; if the user later grants consent, that id is handed
+    to this repository. Such a conversation cannot exist here, so callers treat
+    it as *missing* rather than as a malformed request - a distinction that
+    matters because clients recover from 404 by starting a new conversation,
+    whereas a 400 leaves them stuck on an id the server will never accept.
+    """
+    try:
+        return ObjectId(value)
+    except (InvalidId, TypeError):
+        return None
 
 
 class ConversationRepository(MongoRepository):
@@ -27,12 +47,10 @@ class ConversationRepository(MongoRepository):
         return self.collection.count_documents({"user_id": user_id})
 
     def get_owned(self, conversation_id: str, user_id: str) -> dict | None:
-        return self.collection.find_one(
-            {
-                "_id": to_object_id(conversation_id, label="conversation ID"),
-                "user_id": user_id,
-            }
-        )
+        oid = _oid_or_none(conversation_id)
+        if oid is None:
+            return None
+        return self.collection.find_one({'_id': oid, 'user_id': user_id})
 
     def require_owned(self, conversation_id: str, user_id: str) -> dict:
         conversation = self.get_owned(conversation_id, user_id)
@@ -45,7 +63,9 @@ class ConversationRepository(MongoRepository):
         return doc
 
     def rename(self, conversation_id: str, user_id: str, title: str) -> dict:
-        oid = to_object_id(conversation_id, label="conversation ID")
+        oid = _oid_or_none(conversation_id)
+        if oid is None:
+            raise NotFoundError("Conversation not found")
         result = self.collection.update_one(
             {"_id": oid, "user_id": user_id},
             {"$set": {"title": title, "updated_at": _now()}},
@@ -55,19 +75,22 @@ class ConversationRepository(MongoRepository):
         return self.collection.find_one({"_id": oid})
 
     def delete(self, conversation_id: str, user_id: str) -> bool:
-        result = self.collection.delete_one(
-            {
-                "_id": to_object_id(conversation_id, label="conversation ID"),
-                "user_id": user_id,
-            }
-        )
+        oid = _oid_or_none(conversation_id)
+        if oid is None:
+            return False
+        result = self.collection.delete_one({'_id': oid, 'user_id': user_id})
         return result.deleted_count > 0
 
     def record_turn(self, conversation_id: str, *, memory: dict, last_message: str) -> None:
         """Persist memory, preview text and the message-count bump for one turn."""
+        oid = _oid_or_none(conversation_id)
+        if oid is None:
+            # The turn already produced an answer; failing here would discard
+            # it, so treat an unusable id as nothing to record.
+            return
         now = _now()
         self.collection.update_one(
-            {"_id": to_object_id(conversation_id, label="conversation ID")},
+            {"_id": oid},
             {
                 "$set": {
                     "memory": memory,
