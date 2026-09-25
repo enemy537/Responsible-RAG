@@ -18,7 +18,7 @@ from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 from src.api.deps import get_source_service
 from src.api.schemas.source import (
@@ -135,12 +135,17 @@ def _enforce_size_limit(service: SourceService, source_type: str, *sizes: int | 
 
 @router.get("", response_model=SourceListResponse)
 def list_sources(
-    page: int = 1,
-    limit: int = 120,
+    page: int = Query(1, ge=1),
+    limit: int = Query(120, ge=1, le=2000),
     service: SourceService = Depends(get_source_service),
     admin: dict = Depends(require_admin),
 ):
-    """List knowledge-base sources. Reads Qdrant only — no embedding calls."""
+    """List knowledge-base sources. Reads Qdrant only — no embedding calls.
+
+    ``total`` is always the full number of sources, independent of ``limit``,
+    so clients can page through everything instead of silently showing only
+    the first page.
+    """
     try:
         sources = service.list_sources()
     except Exception:

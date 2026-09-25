@@ -8,9 +8,15 @@ import { AdminShell } from '@/components/layout/AdminShell';
 import { AdminGuard } from '@/components/AuthGuard';
 import { SourceTable } from '@/components/admin/SourceTable';
 import { api, type SourceResponseDTO } from '@/lib/api';
+import { toErrorMessage } from '@/lib/errors';
+
+/** Matches the API's upper bound on ``limit`` for one request. */
+const MAX_SOURCES_PER_REQUEST = 2000;
+const SOURCES_FETCH_LIMIT = 500;
 
 export default function SourcesLibraryPage() {
   const [sources, setSources] = useState<SourceResponseDTO[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -18,10 +24,19 @@ export default function SourcesLibraryPage() {
   async function loadSources() {
     setError(null);
     try {
-      const data = await api.sources.list();
+      // The endpoint paginates server-side. Fetch a full page, then re-request
+      // with the reported ``total`` when there are more rows than came back -
+      // otherwise the table silently shows only the first page, which is why
+      // the list appeared short and the newest sources were unreachable.
+      const first = await api.sources.list(1, SOURCES_FETCH_LIMIT);
+      const data =
+        first.total > first.sources.length
+          ? await api.sources.list(1, Math.min(first.total, MAX_SOURCES_PER_REQUEST))
+          : first;
       setSources(data.sources);
+      setTotal(data.total);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load sources');
+      setError(toErrorMessage(err, 'Failed to load sources'));
     } finally {
       setLoading(false);
     }
@@ -54,7 +69,9 @@ export default function SourcesLibraryPage() {
           <div>
             <h1 className="text-2xl font-semibold font-display">Sources</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Manage your knowledge base sources
+              {loading
+                ? 'Manage your knowledge base sources'
+                : `${total} source${total === 1 ? '' : 's'} in the knowledge base`}
             </p>
           </div>
           <Button asChild>
@@ -85,7 +102,8 @@ export default function SourcesLibraryPage() {
 
         {/* Source table */}
         {!loading && !error && (
-          <SourceTable
+          <>
+            <SourceTable
             sources={sources.map(s => ({
               id: s.id,
               title: s.title,
@@ -106,6 +124,14 @@ export default function SourcesLibraryPage() {
             }))}
             onRefresh={loadSources}
           />
+
+            {total > sources.length && (
+              <p className="text-sm text-amber-600">
+                Showing the first {sources.length} of {total} sources. Narrow the list with
+                search, or page through the API for the rest.
+              </p>
+            )}
+          </>
         )}
       </div>
     </AdminShell>

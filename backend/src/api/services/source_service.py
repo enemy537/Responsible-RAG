@@ -168,7 +168,10 @@ class SourceService:
                 incomplete += 1
 
         return {
-            "total_sources": by_status["indexed"],
+            # Every source, whatever its status. This previously reported
+            # by_status["indexed"], so processing and error sources were
+            # invisible in the dashboard total.
+            "total_sources": len(sources),
             "indexed_sources": by_status["indexed"],
             "processing_sources": by_status["processing"],
             "error_sources": by_status["error"],
