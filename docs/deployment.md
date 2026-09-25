@@ -26,8 +26,13 @@ git remote add origin git@github.com:<owner>/<repo>.git && git push -u origin ma
 
 ### 2. Deploy key
 
+Create the key **once**. `ssh-keygen` overwrites without asking twice, and a re-created private
+key silently orphans the public key already authorized on the server (the failure only shows up
+later as `Permission denied`):
+
 ```bash
-ssh-keygen -t ed25519 -N "" -f ~/.ssh/rrag_deploy
+[ -f ~/.ssh/rrag_deploy ] || ssh-keygen -t ed25519 -N "" -f ~/.ssh/rrag_deploy
+ssh-keygen -lf ~/.ssh/rrag_deploy.pub      # note this fingerprint
 ```
 
 Then authorize that public key on the instance. `ssh-copy-id` alone will fail here
@@ -106,6 +111,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 | `Permission denied (publickey)` | `EC2_SSH_KEY` is not the full private key, or the public key is not in the server's `~/.ssh/authorized_keys` |
 | `ssh-copy-id` fails with `Permission denied (publickey,gssapi-keyex,gssapi-with-mic)` | The remote identity wasn't offered. `ssh-copy-id -i new.pub` only sends *that* key, so it cannot bootstrap itself over a PEM-only account (a `.pem` in `~/` is not a default identity). Add `-o IdentityFile=<the existing .pem>`, or use the append command in §2. |
 | `ssh: no such identity` / key ignored | A `.pem` needs `600` or stricter; `chmod 400 file.pem` |
+| `Permission denied` **after** it previously worked | `~/.ssh/rrag_deploy` was regenerated, so the authorized key no longer matches the private key. Compare `ssh-keygen -lf ~/.ssh/rrag_deploy.pub` against the server's `ssh-keygen -lf ~/.ssh/authorized_keys` — if the fingerprints differ, the installed entry is orphaned: re-install (§2) and delete the stale line. Also update the `EC2_SSH_KEY` secret. |
 | `EC2_USER` wrong | Amazon Linux uses `ec2-user`, Ubuntu uses `ubuntu`. Check with `ssh -i <pem> <user>@<host> whoami`. |
 | `Host key verification failed` | `EC2_HOST` unreachable for `ssh-keyscan`, or an IP change — re-run and check the host |
 | `git pull` fails: "local changes would be overwritten" | The server's working tree has hand-edits. Commit or `git checkout -- .` on the host. This is what stops the pipeline from silently overwriting server-side changes. |
